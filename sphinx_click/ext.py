@@ -150,9 +150,13 @@ def _format_envvars(ctx):
         yield ''
 
 
-def _format_subcommand(command):
+def _format_subcommand(command, link_commands_prefix=None):
     """Format a sub-command of a `click.Command` or `click.Group`."""
-    yield '.. object:: {}'.format(command[0])
+
+    if not link_commands_prefix:
+        yield '.. object:: {}'.format(command[0])
+    else:
+        yield ':doc:`{} </{}/{}>`'.format(command[0], link_commands_prefix, command[0])
 
     if command[1].short_help:
         yield ''
@@ -161,7 +165,7 @@ def _format_subcommand(command):
             yield _indent(line)
 
 
-def _format_command(ctx, show_nested):
+def _format_command(ctx, show_nested, link_commands_prefix=None):
     """Format the output of `click.Command`."""
 
     # description
@@ -215,11 +219,14 @@ def _format_command(ctx, show_nested):
     commands = sorted(getattr(ctx.command, 'commands', {}).items())
 
     if commands:
-        yield '.. rubric:: Commands'
+        if not link_commands_prefix:
+            yield '.. rubric:: Commands'
+        else:
+            yield '.. rubric:: {}'.format(link_commands_prefix.capitalize())
         yield ''
 
     for command in commands:
-        for line in _format_subcommand(command):
+        for line in _format_subcommand(command, link_commands_prefix):
             yield line
         yield ''
 
@@ -231,6 +238,7 @@ class ClickDirective(rst.Directive):
     option_spec = {
         'prog': directives.unchanged_required,
         'show-nested': directives.flag,
+        'link-command-prefix': str
     }
 
     def _load_module(self, module_path):
@@ -258,7 +266,7 @@ class ClickDirective(rst.Directive):
 
         return getattr(mod, attr_name)
 
-    def _generate_nodes(self, name, command, parent=None, show_nested=False):
+    def _generate_nodes(self, name, command, parent=None, show_nested=False, link_commands_prefix=None):
         """Generate the relevant Sphinx nodes.
 
         Format a `click.Group` or `click.Command`.
@@ -284,7 +292,7 @@ class ClickDirective(rst.Directive):
         source_name = ctx.command_path
         result = statemachine.ViewList()
 
-        lines = _format_command(ctx, show_nested)
+        lines = _format_command(ctx, show_nested, link_commands_prefix)
         for line in lines:
             result.append(line, source_name)
 
@@ -299,7 +307,8 @@ class ClickDirective(rst.Directive):
                     command_name,
                     command_obj,
                     ctx,
-                    show_nested))
+                    show_nested,
+                    link_commands_prefix))
 
         return [section]
 
@@ -314,8 +323,9 @@ class ClickDirective(rst.Directive):
             raise self.error(':prog: must be specified')
 
         show_nested = 'show-nested' in self.options
+        command_link_commands_prefix = self.options.get('link-command-prefix', None)
 
-        return self._generate_nodes(prog_name, command, None, show_nested)
+        return self._generate_nodes(prog_name, command, None, show_nested, command_link_commands_prefix)
 
 
 def setup(app):
